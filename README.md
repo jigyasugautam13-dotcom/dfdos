@@ -1,67 +1,144 @@
-📌 Prerequisites
 
-AWS account with admin access
+# 📝 DOFS Terraform Project – Final Documentation
 
-Terraform v1.5+
+---
 
-S3 bucket for Lambda ZIP uploads
+## ✅ README CONTENT
 
-AWS CLI configured with credentials
+### 📌 Prerequisites
+- AWS account with administrative privileges
+- Terraform v1.5 or newer
+- S3 bucket for Lambda ZIP uploads
+- AWS CLI configured (`aws configure`)
+- Git installed and SSH keys added (if using GitHub)
+- ZIP files of Lambda code already uploaded to S3
 
-Git installed and configured
+---
 
-⚙️ Setup Instructions
+### ⚙️ Setup Instructions
 
-Upload ZIPs to S3
-
+#### 1. **Upload Lambda ZIPs to S3**
+```bash
 aws s3 cp ./lambdas/api_handler.zip s3://your-lambda-code-bucket/lambdas/api_handler.zip
 aws s3 cp ./lambdas/validator.zip s3://your-lambda-code-bucket/lambdas/validator.zip
 aws s3 cp ./lambdas/order_storage.zip s3://your-lambda-code-bucket/lambdas/order_storage.zip
 aws s3 cp ./lambdas/fulfill_order.zip s3://your-lambda-code-bucket/lambdas/fulfill_order.zip
+```
 
-Deploy Infrastructure
-
+#### 2. **Deploy Infrastructure**
+```bash
 terraform init
 terraform apply -auto-approve
+```
 
-✅ Testing Guide
+---
 
-✅ Success Scenario
+### 🧪 Testing Guide
 
-API Gateway triggers Lambda → Order validated
+#### ✅ Success Scenario
+- API Gateway receives a `POST /order`
+- Triggers Lambda (API Handler) → Step Function
+- Validator Lambda validates order
+- Order is saved in DynamoDB
+- Pushed to SQS
+- Fulfillment Lambda processes it and updates status to `FULFILLED`
 
-Valid orders stored in DynamoDB
+#### ❌ Failure + DLQ Scenario
+- Validation fails → Step Function captures error → writes to `failed_orders` table
+- Fulfillment Lambda randomly fails with 30% probability
+- After max retries, message goes to SQS DLQ
+- DLQ message is captured in `failed_orders` DynamoDB table
 
-Fulfillment Lambda consumes SQS message
+---
 
-Status updated to FULFILLED
+### 🔁 CI/CD System Overview (Terraform + CodePipeline)
 
-❌ Failure + DLQ Scenario
+- **Source Stage**: GitHub repository push to `main` branch
+- **Build Stage**: AWS CodeBuild runs `terraform plan` and `terraform apply`
+- **Approval Stage** (optional): Manual approval before apply
+- **State Management**: Terraform remote backend via S3 bucket
 
-Validator Lambda raises exception → Step Function fails
+> Note: You may skip GitHub setup if deploying manually or using S3 for Lambda code.
 
-Failed input routed to failed_orders DynamoDB table
+---
 
-SQS processing fails randomly (30%) → Message sent to DLQ
+### 🛠️ Troubleshooting Tips
 
-You can view DLQ messages in SQS console and failed records in DynamoDB.
+| Issue | Resolution |
+|------|------------|
+| Lambda fails to invoke | Check IAM role permissions (`lambda.amazonaws.com`) |
+| Step Function fails | Inspect execution logs, validate input schema |
+| SQS not triggering Lambda | Check event source mapping and permissions |
+| DLQ messages increasing | Likely due to code logic errors or timeouts in fulfillment Lambda |
 
-🔁 CI/CD Pipeline Overview (Optional)
+---
 
-AWS CodePipeline to run terraform plan + terraform apply
+### 📷 AWS Console Screenshot Checklist
+You can take AWS Console screenshots from:
+- [x] Lambda Console (4 functions)
+- [x] API Gateway Console (POST /order)
+- [x] Step Functions → Execution Graph
+- [x] SQS Queues (main + DLQ)
+- [x] DynamoDB Tables (orders, failed_orders)
+- [x] IAM Role for Lambda
+- [x] CodePipeline if implemented
 
-Source: GitHub push to main
+> ✅ **Sample Screenshot**: Refer to screenshot section in submission
 
-Build: CodeBuild executes Terraform commands
+---
 
-Artifacts: Terraform state stored in S3 backend
+### 🗺️ Architecture Diagram
 
-🛠️ Troubleshooting
+```
+         +--------------+
+         | API Gateway  |
+         +------+-------+
+                |
+                v
+         +------+-------+
+         | Lambda: API  |
+         +------+-------+
+                |
+                v
+        +-------+--------+
+        | Step Function  |
+        +--+----------+--+
+           |          |
+           v          v
++----------------+  +--------------------+
+| Validator      |  | Order Storage      |
+| Lambda         |  | Lambda (DynamoDB)  |
++----------------+  +--------+-----------+
+                             |
+                             v
+                         +---+---+
+                         |  SQS  |
+                         +---+---+
+                             |
+                             v
+                  +-------------------+
+                  | Fulfillment Lambda|
+                  +-------------------+
+                             |
+                             v
+                   +------------------+
+                   | DynamoDB Update  |
+                   +------------------+
+                             |
+                         (if fails)
+                             v
+                       +----------+
+                       | DLQ +    |
+                       | failed_  |
+                       | orders   |
+                       +----------+
+```
 
-Lambda fails to invoke: Check IAM role permissions for lambda.amazonaws.com
+---
 
-Step Function error: Check Catch blocks or input formats
+### 📤 Submission Instructions
 
-SQS not triggering Lambda: Ensure event source mapping is active
+- 🧪 Make sure `terraform apply` works from scratch and creates the full infrastructure.
+- 💾 Include `terraform.auto.tfvars` (example provided) and `lambda/` ZIPs if needed.
 
-DLQ filling up: Indicates retry failures; investigate and fix root cause
+
