@@ -2,9 +2,14 @@ module "iam" {
   source = "./modules/iam"
 }
 
-module "lambdas" {
-  source               = "./modules/lambdas"
-  lambda_exec_role_arn = module.iam.lambda_exec_role_arn
+module "lambda_api_handler" {
+  source = "./modules/lambdas"
+
+  function_name         = "api-handler"
+  lambda_exec_role_arn  = aws_iam_role.lambda_exec.arn
+  lambda_s3_bucket      = var.lambda_s3_bucket
+  lambda_s3_key         = var.lambda_s3_key
+  environment_variables = {}
 }
 
 module "api_gateway" {
